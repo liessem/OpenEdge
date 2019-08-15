@@ -1,0 +1,145 @@
+/***
+**  Objetivo..: Busca o peso l­quido e peso bruto da balan»a Toledo
+**  Autor.....: Aurélio Gregorio Liessem
+***/
+
+/* PARôMETROS */
+DEFINE OUTPUT PARAM pPesoLiquido AS DECIMAL.
+DEFINE OUTPUT PARAM pPesoBruto   AS DECIMAL.
+DEFINE OUTPUT PARAM TABLE FOR tt-erro.
+
+/* VARIæVEIS */
+DEFINE VARIABLE net             AS MEMPTR.
+DEFINE VARIABLE pesoBruto       AS MEMPTR.
+DEFINE VARIABLE pesoLiquido     AS MEMPTR.
+DEFINE VARIABLE Estado          AS MEMPTR.
+DEFINE VARIABLE EmMov           AS MEMPTR.
+DEFINE VARIABLE i-cont          AS INTEGER.
+DEFINE VARIABLE Sel_Canal       AS INTEGER.
+DEFINE VARIABLE ret             AS INTEGER.
+DEFINE VARIABLE IPStr           AS CHAR.
+DEFINE VARIABLE ti-pestotal     AS CHAR.
+DEFINE VARIABLE Canal           AS INTEGER.
+DEFINE VARIABLE pEstado         AS CHARACTER FORMAT 'x(08)'.
+DEFINE VARIABLE pEmMovimento    AS CHARACTER FORMAT 'x(01)'.
+DEFINE VARIABLE Ret_W9091       AS INTEGER.
+
+DEFINE VARIABLE iSeqErro        AS INTEGER     NO-UNDO.
+
+    SET-SIZE( pesoBruto )   = 12.
+    SET-SIZE( pesoLiquido ) = 12.
+    SET-SIZE( Estado )  = 8.
+    SET-SIZE( EmMov )   = 1.
+
+DO:
+    RUN W9091Serial(INPUT 2
+                   ,OUTPUT canal).
+
+    RUN Update_Canal(INPUT canal
+                    ,OUTPUT ret ).
+
+    IF ret = 0 THEN DO: /*Leitura vÿlida*/
+        RUN Net_Canal(INPUT canal
+                     ,OUTPUT pesoLiquido).
+/*                                                            */
+/*         MESSAGE 'pesoLiquido - ' GET-STRING(pesoLiquido,1) */
+/*             VIEW-AS ALERT-BOX INFO BUTTONS OK.             */
+
+        RUN Gross_Canal(INPUT canal
+                       ,OUTPUT pesoBruto).
+/*         MESSAGE 'pesoBruto - ' GET-STRING(pesoBruto,1) */
+/*             VIEW-AS ALERT-BOX INFO BUTTONS OK.         */
+
+        ASSIGN pPesoLiquido = DECIMAL(GET-STRING(pesoLiquido,1))
+               pPesoBruto   = DECIMAL(GET-STRING(pesoBruto,1)).
+    END.
+    ELSE DO:
+        RUN piGravaErro(INPUT 1
+                       ,INPUT "N’o foi poss­vel estabelecer conex’o com a balan»a").
+        RUN Close_Canal ( INPUT Canal).        
+    END.
+END.
+
+PROCEDURE W9091Serial EXTERNAL "PcLink6.dll" PERSISTENT:
+    DEFINE INPUT  PARAMETER IP_SETADO    AS LONG.
+    DEFINE RETURN PARAMETER Ret_W9091    AS LONG.
+END PROCEDURE.
+
+PROCEDURE W9091SerialC EXTERNAL "PcLink6.dll" PERSISTENT:
+    DEFINE INPUT  PARAMETER IP_SETADO    AS LONG.
+    DEFINE RETURN PARAMETER Ret_W9091    AS LONG.
+END PROCEDURE.
+
+/* Update_Canal                                                                                                                                                                                                                                   */
+/* Faz a leitura da balan»a, indicador ou leitor, correspondente ao canal passado como par³metro. No caso de uma balan»a, o peso pode estar estÿvel ou instÿvel.                                                                                  */
+/* Par³metros :                                                                                                                                                                                                                                   */
+/* Canal - Valor inteiro correspondente ao nœmero do canal fornecido por alguma das fun»„es de balan»a(W9091, por exemplo) para realizar a leitura da balan»a, indicador ou leitor.                                                               */
+/* Retorno :                                                                                                                                                                                                                                      */
+/* 0 - Indica que a leitura foi vÿlida                                                                                                                                                                                                            */
+/* 1 - Indica que n’o foi poss­vel efetuar a leitura.                                                                                                                                                                                             */
+/* 2 - Indica que houve erro na solicita»’o da informa»’o para o equipamento .                                                                                                                                                                    */
+/* 3 - Indica que hÿ sobrecarga sobre a balan»a. Exemplo : na plataforma de um indicador 9091, ² colocado 26 kg , que tem uma carga mÿxima de 25kg. O display apaga , mas o indicador continua transmitindo. Isto deve ser considerado como erro. */
+/* 999 - Indica que n’o conseguiu detectar a hardkey local ou de rede.                                                                                                                                                                            */
+PROCEDURE Update_Canal EXTERNAL "PcLink6.dll" PERSISTENT:
+    DEFINE INPUT  PARAMETER Canal AS LONG.
+    DEFINE RETURN PARAMETER Ret   AS LONG.
+END PROCEDURE.
+
+/* Obt²m o peso l­quido, ap½s utilizar a fun»’o Update_Canal ou Update_NoMotion, se n’o utilizar nenhuma das fun»„es obterÿ o œltimo peso lido.                                 */
+/* Par³metros :                                                                                                                                                                 */
+/*     Canal - Valor inteiro correspondente ao nœmero do canal fornecido por alguma das fun»„es de balan»a(W9091, por exemplo) para realizar a leitura do indicador ou balan»a. */
+/* Retorno :                                                                                                                                                                    */
+/*     Peso l­quido                                                                                                                                                             */
+PROCEDURE Net_Canal EXTERNAL "PcLink6.dll" PERSISTENT:
+    DEFINE INPUT  PARAMETER Canal    AS LONG.
+    DEFINE RETURN PARAMETER ppesoLiquido AS MEMPTR.
+END PROCEDURE.
+
+/* Obt²m o peso bruto, ap½s utilizar a fun»’o Update_Canal ou Update_NoMotion, se n’o utilizar nenhuma das fun»„es obterÿ o œltimo peso lido.                                   */
+/* Par³metros :                                                                                                                                                                 */
+/*     Canal - Valor inteiro correspondente ao nœmero do canal fornecido por alguma das fun»„es de balan»a(W9091, por exemplo) para realizar a leitura do indicador ou balan»a. */
+/* Retorno :                                                                                                                                                                    */
+/*     Peso bruto                                                                                                                                                               */
+PROCEDURE Gross_Canal EXTERNAL "PcLink6.dll" PERSISTENT:
+    DEFINE INPUT  PARAMETER  Canal AS LONG.
+    DEFINE RETURN PARAMETER pBruto AS MEMPTR.
+END PROCEDURE.
+
+/* Faz a leitura da balan»a ou indicador, correspondente ao canal passado como par³metro. O peso sobre a balan»a deve estar estÿvel. Esta fun»’o n’o tem validade para o indicador Challenger MSI3360.                                                */
+/* Par³metros :                                                                                                                                                                                                                                       */
+/*     Canal - Valor inteiro correspondente ao nœmero do canal fornecido por alguma das fun»„es de balan»a(W9091, por exemplo) para realizar a leitura do indicador ou balan»a.                                                                       */
+/*     Tempo - Contado em milisegundos ( 1000ms = 1 segundo); Valor 0(Zero) - Aguardarÿ at² a estabiliza»’o da balan»a; Valores acima de zero, aguardarÿ o tempo passado; Valor -1 serÿ utilizado o tempo default da DLL                              */
+/* Retorno :                                                                                                                                                                                                                                          */
+/*     0 - Indica que a leitura foi vÿlida                                                                                                                                                                                                            */
+/*     1 - Indica que n’o foi poss­vel efetuar a leitura da balan»a.                                                                                                                                                                                  */
+/*     2 - Indica que expirou timeout para efetuar a leitura sem movimento.                                                                                                                                                                           */
+/*     3 - Indica que hÿ sobrecarga sobre a balan»a. Exemplo : na plataforma de um indicador 9091, ² colocado 26 kg , que tem uma carga mÿxima de 25kg. O display apaga , mas o indicador continua transmitindo. Isto deve ser considerado como erro. */
+/*     999 - Indica que n’o conseguiu detectar a hardkey local ou de rede.                                                                                                                                                                            */
+PROCEDURE Update_NoMotion EXTERNAL "PcLink6.dll" PERSISTENT:
+    DEFINE INPUT PARAMETER  Canal AS LONG.
+    DEFINE INPUT PARAMETER  iTempo AS LONG.
+    DEFINE RETURN PARAMETER Ret   AS LONG.
+END PROCEDURE.
+
+PROCEDURE Close_Canal EXTERNAL "PcLink6.dll" PERSISTENT:
+    DEFINE INPUT PARAMETER Canal AS LONG.
+END PROCEDURE.
+
+PROCEDURE piGravaErro:
+    DEFINE INPUT PARAM pCodErro  LIKE tt-erro.cd-erro.
+    DEFINE INPUT PARAM pMensagem LIKE tt-erro.mensagem.
+
+    FIND LAST tt-erro NO-ERROR.
+    IF AVAIL tt-erro THEN
+        ASSIGN iSeqErro = tt-erro.i-sequen + 1.
+    ELSE
+        ASSIGN iSeqErro = 1.
+
+    CREATE tt-erro.
+    ASSIGN tt-erro.i-sequen = iSeqErro
+           tt-erro.cd-erro  = pCodErro
+           tt-erro.mensagem = pMensagem.
+
+    RETURN "OK":U.
+
+END PROCEDURE.
